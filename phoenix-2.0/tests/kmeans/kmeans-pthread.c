@@ -256,6 +256,8 @@ int main(int argc, char **argv)
    thread_arg *arg;
    int num_per_thread, excess; 
    
+   //printf("%s %s():\n",__FILE__, __func__);
+
    parse_args(argc, argv);   
    
    points = (int **)malloc(sizeof(int *) * num_points);

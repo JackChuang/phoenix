@@ -44,6 +44,7 @@
 #define false 0
 #define true 1
 
+int nrthread; // totoal # of threads
 int num_points; // number of vectors
 int dim;         // Dimension of each vector
 int num_means; // number of clusters
@@ -115,7 +116,7 @@ void parse_args(int argc, char **argv)
     dim = DEF_DIM;
     grid_size = DEF_GRID_SIZE;
     
-    while ((c = getopt(argc, argv, "d:c:p:s:")) != EOF) 
+    while ((c = getopt(argc, argv, "d:c:p:s:t:")) != EOF) 
     {
         switch (c) {
             case 'd':
@@ -130,17 +131,21 @@ void parse_args(int argc, char **argv)
             case 's':
                 grid_size = atoi(optarg);
                 break;
+            case 't':
+				nrthread = atoi(optarg);
+                break;
             case '?':
-                printf("Usage: %s -d <vector dimension> -c <num clusters> -p <num points> -s <max value>\n", argv[0]);
+                printf("Usage: %s -t <# of threads> -d <vector dimension> -c <num clusters> -p <num points> -s <max value>\n", argv[0]);
                 exit(1);
         }
     }
     
-    if (dim <= 0 || num_means <= 0 || num_points <= 0 || grid_size <= 0) {
+    if (dim <= 0 || num_means <= 0 || num_points <= 0 || grid_size <= 0 || nrthread <= 0) {
         printf("Illegal argument value. All values must be numeric and greater than 0\n");
         exit(1);
     }
     
+    printf("# of threads = %d\n", nrthread);
     printf("Dimension = %d\n", dim);
     printf("Number of clusters = %d\n", num_means);
     printf("Number of points = %d\n", num_points);
@@ -366,10 +371,22 @@ int main(int argc, char **argv)
     unsigned int library_time = 0;
     unsigned int inter_library_time = 0;
 #endif
-
+/*
+	//printf("%s %s():\n", __FILE__, __func__);
+	if (argc == 2) {
+//		printf("# of threads = %d\n", nrthread);
+//		printf("==== dbg ===\n");
+//		printf("atoi(GETENV(\"MR_NUMTHREADS\")) = %d\n", atoi(GETENV("MR_NUMTHREADS")));
+//		printf("=== dbg done ===\n\n");
+	} else {
+//		printf("Usage ./<app> <threads> <c> <d> <p>\n");
+		exit(-1);
+	}
+	//printf("arg done\n",);
+*/
     get_time (&begin);
     
-    parse_args(argc, argv);    
+    parse_args(argc, argv); 
     
     // get points
     kmeans_data.points = (int *)malloc(sizeof(int) * num_points * dim);
@@ -406,14 +423,15 @@ int main(int argc, char **argv)
     map_reduce_args.partition = NULL; // use default
     map_reduce_args.result = &kmeans_vals;
     map_reduce_args.data_size = (num_points + num_means) * dim * sizeof(int);  
-    map_reduce_args.L1_cache_size = atoi(GETENV("MR_L1CACHESIZE"));//1024 * 8;
-    map_reduce_args.num_map_threads = atoi(GETENV("MR_NUMTHREADS"));//8;
-    map_reduce_args.num_reduce_threads = atoi(GETENV("MR_NUMTHREADS"));//16;
-    map_reduce_args.num_merge_threads = atoi(GETENV("MR_NUMTHREADS"));//8;
+    map_reduce_args.L1_cache_size = atoi(GETENV("MR_L1CACHESIZE"));
     map_reduce_args.num_procs = atoi(GETENV("MR_NUMPROCS"));//16;
     map_reduce_args.key_match_factor = (float)atof(GETENV("MR_KEYMATCHFACTOR"));//2;
     map_reduce_args.use_one_queue_per_task = true;
-    
+
+    map_reduce_args.num_map_threads = nrthread;
+    map_reduce_args.num_reduce_threads = nrthread;
+    map_reduce_args.num_merge_threads = nrthread;
+
     printf("KMeans: Calling MapReduce Scheduler\n");
 
     get_time (&end);
@@ -422,9 +440,11 @@ int main(int argc, char **argv)
     fprintf (stderr, "initialize: %u\n", time_diff (&end, &begin));
 #endif
 
+	int loop = 0;
     first_run = true;
     while (modified == true)
     {
+		loop++;
         modified = false;
         kmeans_data.next_point = 0;
         //dprintf(".");
@@ -455,7 +475,7 @@ int main(int argc, char **argv)
     }  
 
 #ifdef TIMING
-    fprintf (stderr, "library: %u\n", library_time);
+    fprintf (stderr, "library: %u us\n", library_time);
     fprintf (stderr, "inter library: %u\n", inter_library_time);
 #endif
 
@@ -466,8 +486,8 @@ int main(int argc, char **argv)
     dprintf("\n");
     printf("KMeans: MapReduce Completed\n");  
 
-    dprintf("\n\nFinal means:\n");
-    dump_means(kmeans_data.means, num_means);
+    //dprintf("\n\nFinal means:\n");
+    //dump_means(kmeans_data.means, num_means);
 
     free(kmeans_data.points);
     
@@ -486,6 +506,8 @@ int main(int argc, char **argv)
 #ifdef TIMING
     fprintf (stderr, "finalize: %u\n", time_diff (&end, &begin));
 #endif
+    fprintf (stderr, "loop = %d\n", loop);
+    fprintf (stderr, "Main Exec Time: %u us\n", library_time);
 
     return 0;
 }

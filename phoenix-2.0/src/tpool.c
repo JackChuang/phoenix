@@ -23,6 +23,13 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */ 
+#define _GNU_SOURCE /* pophype: order matters */
+#include <sched.h>   /* cpu_set_t , CPU_SET, setaff */
+#include <stdlib.h>
+
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/sysinfo.h>
 
 #include <pthread.h>
 #include <assert.h>
@@ -33,7 +40,11 @@
 #include "tpool.h"
 #include "stddefines.h"
 
+#define false 0
+#define true 1
+
 typedef struct {
+	int				id;
     sem_t           sem_run;
     unsigned int    *num_workers_done;
     sem_t           *sem_all_workers_done;
@@ -106,7 +117,8 @@ tpool_t* tpool_create (int num_threads)
         tpool->thread_args[i].ret = (void **)mem_malloc (sizeof (void *));
         CHECK_ERROR (tpool->thread_args[i].ret == NULL);
         tpool->thread_args[i].num_workers = &tpool->num_workers;
-        
+        tpool->thread_args[i].id = i;
+
         ret = pthread_create (
             &tpool->threads[i], &attr, thread_loop, &tpool->thread_args[i]);
         if (ret) 
@@ -238,15 +250,67 @@ int tpool_destroy (tpool_t *tpool)
     return result;
 }
 
+/* dhype utility */
+#ifdef __x86_64__
+#define SYSCALL_POPCORN_MIGRATE 330
+#define SYSCALL_POPCORN_PROPOSE_MIGRATION   331
+#define SYSCALL_POPCORN_GET_THREAD_STATUS   332
+#define SYSCALL_POPCORN_GET_NODE_INFO   333
+#define SYSCALL_GETTID 186
+#elif __aarch64__
+#define SYSCALL_POPCORN_MIGRATE 285
+#define SYSCALL_POPCORN_PROPOSE_MIGRATION   286
+#define SYSCALL_POPCORN_GET_THREAD_STATUS   287
+#define SYSCALL_POPCORN_GET_NODE_INFO   288
+#define SYSCALL_GETTID 178
+#elif __powerpc64__
+#define SYSCALL_POPCORN_MIGRATE 379
+#define SYSCALL_POPCORN_PROPOSE_MIGRATION   380
+#define SYSCALL_POPCORN_GET_THREAD_STATUS   381
+#define SYSCALL_POPCORN_GET_NODE_INFO   382
+#define SYSCALL_GETTID 207
+#else
+#error Does not support this architecture
+#endif
+
+int popcorn_gettid(void)
+{
+    return syscall(SYSCALL_GETTID);
+}
+
+void print_affinity()
+{
+    cpu_set_t mask;
+    long nproc, i;
+
+    if (sched_getaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
+        perror("sched_getaffinity");
+        assert(false);
+    } else {
+        nproc = sysconf(_SC_NPROCESSORS_ONLN);
+        printf("[%d] sched_getaffinity = ", popcorn_gettid());
+        for (i = 0; i < nproc; i++) {
+            printf("%d ", CPU_ISSET(i, &mask));
+        }
+        printf("\n");
+    }
+}
+
 static void* thread_loop (void *arg)
 {
     thread_arg_t    *thread_arg = arg;
     thread_func     thread_func;
     void            *thread_func_arg;
     void            **ret;
-    int             num_workers_done;
+    int             num_workers_done;    
 
-    assert (thread_arg);
+	assert (thread_arg);
+
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(thread_arg->id, &cpuset); // Start from 0
+	sched_setaffinity(0, sizeof(cpuset), &cpuset);
+	//print_affinity();
 
     while (1)
     {

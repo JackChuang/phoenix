@@ -32,6 +32,7 @@ HOME = ../..
 include $(HOME)/Defines.mk
 
 LIBS += -L$(HOME)/$(LIB_DIR) -l$(PHOENIX)
+CFLAGS += -DTIMING
 
 KMEANS_OBJS = kmeans.o
 KMEANS_SEQ_OBJS = kmeans-seq.o

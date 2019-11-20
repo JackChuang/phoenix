@@ -232,7 +232,7 @@ void *wordcount_combiner (iterator_t *itr)
 int main(int argc, char *argv[]) 
 {
     final_data_t wc_vals;
-    int i;
+//    int i;
     int fd;
     char * fdata;
     int disp_num;
@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
     // Make sure a filename is specified
     if (argv[1] == NULL)
     {
-        printf("USAGE: %s <filename> [Top # of results to display]\n", argv[0]);
+        printf("USAGE: %s <filename> [Top # of results to display] <nrthreads>\n", argv[0]);
         exit(1);
     }
 
@@ -301,11 +301,24 @@ int main(int argc, char *argv[])
     map_reduce_args.result = &wc_vals;
     map_reduce_args.data_size = finfo.st_size;
     map_reduce_args.L1_cache_size = atoi(GETENV("MR_L1CACHESIZE"));//1024 * 1024 * 2;
-    map_reduce_args.num_map_threads = atoi(GETENV("MR_NUMTHREADS"));//8;
-    map_reduce_args.num_reduce_threads = atoi(GETENV("MR_NUMTHREADS"));//16;
-    map_reduce_args.num_merge_threads = atoi(GETENV("MR_NUMTHREADS"));//8;
-    map_reduce_args.num_procs = atoi(GETENV("MR_NUMPROCS"));//16;
+    //map_reduce_args.num_map_threads = atoi(GETENV("MR_NUMTHREADS"))
+    //map_reduce_args.num_reduce_threads = atoi(GETENV("MR_NUMTHREADS"));
+    //map_reduce_args.num_merge_threads = atoi(GETENV("MR_NUMTHREADS"));
+    map_reduce_args.num_procs = atoi(GETENV("MR_NUMPROCS"));
     map_reduce_args.key_match_factor = (float)atof(GETENV("MR_KEYMATCHFACTOR"));//2;
+
+	int nrthread; // totoal # of threads
+	if (argc == 4) {
+		nrthread = atoi(argv[3]);
+		printf("# of threads = %d\n", nrthread);
+	} else {
+        printf("USAGE: %s <filename> [Top # of results to display] <nrthreads>\n", argv[0]);
+		exit(-1);
+	}
+
+	map_reduce_args.num_map_threads = nrthread;
+	map_reduce_args.num_reduce_threads = nrthread;
+	map_reduce_args.num_merge_threads = nrthread;
 
     printf("Wordcount: Calling MapReduce Scheduler Wordcount\n");
 
@@ -323,30 +336,36 @@ int main(int argc, char *argv[])
 
 #ifdef TIMING
     library_time += time_diff (&end, &begin);
+    printf("Total Exec Time: %u us\n", library_time);
 #endif
 
     get_time (&begin);
 
     gettimeofday(&endtime,0);
 
-    printf("Wordcount: Completed %ld\n",(endtime.tv_sec - starttime.tv_sec));
+	unsigned long diff = 1000000 * (endtime.tv_sec - starttime.tv_sec) +
+										endtime.tv_usec - starttime.tv_usec;
+	printf("Wordcount: Completed %ld us\n",diff);
+//    printf("Wordcount: Completed %ld s\n",(endtime.tv_sec - starttime.tv_sec));
+//    printf("Wordcount: Completed .%ld us\n",(endtime.tv_usec - starttime.tv_usec));
 
-    printf("Wordcount: MapReduce Completed\n");
-
-    printf("Wordcount: Calling MapReduce Scheduler Sort\n");
-
-    mapreduce_sort(wc_vals.data, wc_vals.length, sizeof(keyval_t), mykeyvalcmp);
-
-    CHECK_ERROR (map_reduce_finalize ());
-
-    printf("Wordcount: MapReduce Completed\n");
-
-    dprintf("\nWordcount: Results (TOP %d):\n", disp_num);
-    for (i = 0; i < disp_num && i < wc_vals.length; i++)
-    {
-      keyval_t * curr = &((keyval_t *)wc_vals.data)[i];
-      dprintf("%15s - %" PRIdPTR "\n", (char *)curr->key, (intptr_t)curr->val);
-    }
+	printf("Wordcount: MapReduce Completed\n");
+//
+//    printf("Wordcount: Calling MapReduce Scheduler Sort\n");
+//
+//	/* This func tion is in ./tests/word_count/sort.c */
+//    mapreduce_sort(wc_vals.data, wc_vals.length, sizeof(keyval_t), mykeyvalcmp);
+//
+//    CHECK_ERROR (map_reduce_finalize ());
+//
+//    printf("Wordcount: MapReduce Completed\n");
+//
+//    dprintf("\nWordcount: Results (TOP %d):\n", disp_num);
+//    for (i = 0; i < disp_num && i < wc_vals.length; i++)
+//    {
+//      keyval_t * curr = &((keyval_t *)wc_vals.data)[i];
+//      dprintf("%15s - %" PRIdPTR "\n", (char *)curr->key, (intptr_t)curr->val);
+//    }
 
     free(wc_vals.data);
 

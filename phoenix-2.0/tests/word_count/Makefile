@@ -32,6 +32,7 @@ HOME = ../..
 include $(HOME)/Defines.mk
 
 LIBS += -L$(HOME)/$(LIB_DIR) -l$(PHOENIX)
+CFLAGS += -DTIMING
 
 WC_OBJS := word_count.o sort.o
 WC_OBJS_PTHREAD := word_count-pthread.o sort-pthread.o

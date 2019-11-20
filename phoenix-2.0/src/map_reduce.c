@@ -62,9 +62,13 @@
 /* Begin tunables. */
 //#define INCREMENTAL_COMBINER
 
-#define DEFAULT_NUM_REDUCE_TASKS    256
+//#define DEFAULT_NUM_REDUCE_TASKS    256 // 256 / 32 cpus = 8
+#define DEFAULT_NUM_REDUCE_TASKS    32 // 4 cpus * 8 = 32
+//#define DEFAULT_NUM_REDUCE_TASKS    4
+//#define DEFAULT_NUM_REDUCE_TASKS    1
 #define EXTENDED_NUM_REDUCE_TASKS   (DEFAULT_NUM_REDUCE_TASKS * 128)
-#define DEFAULT_CACHE_SIZE          (64 * 1024)
+//#define DEFAULT_CACHE_SIZE          (64 * 1024)
+#define DEFAULT_CACHE_SIZE          (32 * 1024)
 //#define DEFAULT_CACHE_SIZE        (8 * 1024)
 #define DEFAULT_KEYVAL_ARR_LEN      10
 #define DEFAULT_VALS_ARR_LEN        10
@@ -260,7 +264,11 @@ map_reduce (map_reduce_args_t * args)
        /* could not allocate environment */
        return -1;
     }
-    //env_print (env);
+
+	printf("=== dbg ===\n");
+    env_print (env);
+	printf("=== dbg done ===\n\n");
+
     env->taskQueue = tq_init (env->num_map_threads);
     assert (env->taskQueue != NULL);
 
@@ -424,6 +432,7 @@ env_init (map_reduce_args_t *args)
         env->num_reduce_tasks = (int)
             ( (env->key_match_factor * args->data_size) /
                 args->L1_cache_size);
+		//printf("Not\n");
     }
     else
     {
@@ -431,6 +440,7 @@ env_init (map_reduce_args_t *args)
         env->num_reduce_tasks = (int) 
             ( (env->key_match_factor * args->data_size) / 
                 DEFAULT_CACHE_SIZE );
+		//printf("num_reduce_tasks updated\n");
     }
 
     if (env->num_reduce_tasks <= 0) env->num_reduce_tasks = 1;
@@ -439,10 +449,13 @@ env_init (map_reduce_args_t *args)
     if (env->oneOutputQueuePerReduceTask == false) 
     {
         env->num_reduce_tasks = EXTENDED_NUM_REDUCE_TASKS;
+		//printf("Not\n");
     } 
     else 
     {
         env->num_reduce_tasks = DEFAULT_NUM_REDUCE_TASKS;
+		//printf("num_reduce_tasks updated - "
+		//			"dominated by DEFAULT_NUM_REDUCE_TASKS\n");
     }
     env->num_merge_threads = MIN (
         env->num_merge_threads, env->num_reduce_tasks / 2);
